@@ -6,10 +6,11 @@ from keras.utils import Sequence
 from sklearn.feature_extraction.image import extract_patches_2d
 
 class CustomImgGen(Sequence):
-    def __init__(self, data_df, batch_size, augmentation_params):
+    def __init__(self, data_df, batch_size, augmentation_params, df_type):
         self.data_df = data_df
         self.batch_size = batch_size
         self.augmentation_params = augmentation_params
+        self.df_type = df_type
         self.datagen = ImageDataGenerator(**self.augmentation_params)
         #self.indexes = np.arange(len(self.data_df))
 
@@ -42,24 +43,27 @@ class CustomImgGen(Sequence):
             #label = self.data_df['boneage'][idx]
             label = self.data_df['normalized_boneage'][idx]
             gender = self.data_df['male'][idx]
-
             image = self.load_image(image_path)
-            augmented = self.datagen.random_transform(image)
-            #plt.imshow(augmented)
-            #plt.show()
-            batch_images.append(augmented)
+            if self.df_type == 'Training' or self.df_type == 'Validation':
+                augmented = self.datagen.random_transform(image)
+                #plt.imshow(augmented)
+                #plt.show()
+                batch_images.append(augmented)
+            if self.df_type == 'Test':
+                batch_images.append(image)
             batch_labels.append(label)
             batch_gender.append(gender)
         return {'Sex': np.array(batch_gender), 'Images':np.array(batch_images)}, np.array(batch_labels)
     
 
 class CustomImgPatchGen(Sequence):
-    def __init__(self, data_df, batch_size, patch_size, max_patches, augmentation_params):
+    def __init__(self, data_df, batch_size, patch_size, max_patches, augmentation_params, df_type):
         self.data_df = data_df
         self.batch_size = batch_size
         self.patch_size = patch_size
         self.max_patches = max_patches
         self.augmentation_params = augmentation_params
+        self.df_type = df_type
         self.datagen = ImageDataGenerator(**self.augmentation_params)
         self.list_indexes = []
         #self.indexes = np.arange(len(self.data_df))
@@ -104,11 +108,14 @@ class CustomImgPatchGen(Sequence):
             patches = extract_patches_2d(image, patch_size = self.patch_size, max_patches = self.max_patches, random_state = 12345)
 
             for patch in patches:
-                #patch = Image.fromarray(patch, mode='RGB')
-                augmented = self.datagen.random_transform(patch)
-                #plt.imshow(augmented)
-                #plt.show()
-                batch_images.append(augmented)
+                if self.df_type == 'Training' or self.df_type == 'Validation':
+                    #patch = Image.fromarray(patch, mode='RGB')
+                    augmented = self.datagen.random_transform(patch)
+                    #plt.imshow(augmented)
+                    #plt.show()
+                    batch_images.append(augmented)
+                if self.df_type == 'Test':
+                    batch_images.append(patch)
                 batch_labels.append(label)
                 batch_gender.append(gender)
                 saved_indexes.append(idx)
@@ -124,6 +131,45 @@ class CustomImgPatchGen(Sequence):
             #batch_labels = batch_labels[randomize]
             #batch_gender = batch_gender[randomize]
         self.list_indexes.append(saved_indexes)
+        return {'Sex': np.array(batch_gender), 'Images':np.array(batch_images)}, np.array(batch_labels)
+    
+
+class CustomImgGen_1ch(Sequence):
+    def __init__(self, data_df, batch_size, augmentation_params, df_type):
+        self.data_df = data_df
+        self.batch_size = batch_size
+        self.augmentation_params = augmentation_params
+        self.df_type = df_type
+        self.datagen = ImageDataGenerator(**self.augmentation_params)
+
+    def __len__(self):
+        return int(np.ceil(len(self.data_df) / self.batch_size))
+
+    def load_image(self, image_path):
+        img = Image.open(image_path)
+        img = img.convert('RGB')
+        img_array = np.array(img)
+        preprocessed_image = preprocess_input(img_array)
+        return preprocessed_image
+
+    def __getitem__(self, index):
+        batch_indexes = np.random.randint(0, len(self.data_df), size = self.batch_size)
+        batch_images = []
+        batch_labels = []
+        batch_gender = []
+
+        for idx in batch_indexes:
+            image_path = self.data_df['path'][idx]
+            label = self.data_df['normalized_boneage'][idx]
+            gender = self.data_df['male'][idx]
+            image = self.load_image(image_path)
+            if self.df_type == 'Training' or self.df_type == 'Validation':
+                augmented = self.datagen.random_transform(image)
+                batch_images.append(augmented[:, :, 0])
+            if self.df_type == 'Test':
+                batch_images.append(image[:, :, 0])
+            batch_labels.append(label)
+            batch_gender.append(gender)
         return {'Sex': np.array(batch_gender), 'Images':np.array(batch_images)}, np.array(batch_labels)
 
 
